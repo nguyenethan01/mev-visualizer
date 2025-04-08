@@ -1,4 +1,5 @@
 use ethers::providers::{Provider, Http};
+use ethers::middleware::Middleware;
 use std::env;
 use dotenv::dotenv;
 
