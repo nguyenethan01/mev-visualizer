@@ -111,6 +111,55 @@ fn identify_arbitrage(transactions: &[Transaction]) -> Vec<(String, String)> {
     arbitrage_opportunities
 }
 
+// Function to identify transactions from known MEV searchers
+fn identify_mev_searcher_txs(transactions: &[Transaction]) -> Vec<Transaction> {
+    let searchers = get_mev_searchers();
+    
+    transactions.iter()
+        .filter(|tx| searchers.contains(&tx.from))
+        .cloned()
+        .collect()
+}
+
+// Update the analyze_block_for_mev function to include searcher detection
+fn analyze_block_for_mev(block: &BlockWithTransactions) -> anyhow::Result<Vec<BlockMevData>> {
+    let mut mev_opportunities = Vec::new();
+    let block_number = block.number.unwrap().as_u64();
+    
+    // 1. Filter for DEX swaps
+    let dex_swaps = identify_dex_swaps(&block.transactions);
+    
+    // 2. Look for potential arbitrage patterns
+    let arbitrage_opportunities = identify_arbitrage(&block.transactions);
+    
+    // 3. Identify MEV searcher transactions
+    let searcher_txs = identify_mev_searcher_txs(&block.transactions);
+    if !searcher_txs.is_empty() {
+        mev_opportunities.push(BlockMevData {
+            block: block_number,
+            mev_opportunity: MevOpportunity {
+                opportunity_type: "mev_searcher".to_string(),
+                token: "Multiple".to_string(),
+                profit_estimate_eth: format!("{} txs", searcher_txs.len()),
+            },
+        });
+    }
+    
+    // Add arbitrage opportunities
+    for (token, profit) in arbitrage_opportunities {
+        mev_opportunities.push(BlockMevData {
+            block: block_number,
+            mev_opportunity: MevOpportunity {
+                opportunity_type: "arbitrage".to_string(),
+                token,
+                profit_estimate_eth: profit,
+            },
+        });
+    }
+    
+    Ok(mev_opportunities)
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenv().ok(); // Load environment variables from .env
